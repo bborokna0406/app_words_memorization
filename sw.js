@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "words-memorization-";
-const CACHE_NAME = `${CACHE_PREFIX}app-shell-v2`;
+const CACHE_NAME = `${CACHE_PREFIX}app-shell-v3`;
 const APP_SHELL = [
   "./",
   "./index.html",
