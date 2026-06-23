@@ -106,6 +106,17 @@ h2 {
   color: var(--muted);
 }
 
+#summaryText {
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.topbar .app-version {
+  margin-top: 2px;
+  font-size: 11px;
+  opacity: 0.78;
+}
+
 main {
   display: grid;
   grid-template-columns: 1fr;
@@ -330,13 +341,6 @@ textarea:focus {
 
 .empty-text {
   padding: 20px 4px 4px;
-  text-align: center;
-}
-
-.app-footer {
-  padding: 4px 0 max(4px, env(safe-area-inset-bottom));
-  color: var(--muted);
-  font-size: 12px;
   text-align: center;
 }
 
