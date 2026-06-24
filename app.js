@@ -8,7 +8,8 @@ const state = {
   currentQuestion: null,
   answerVisible: false,
   studyQueue: [],
-  studyCyclePaused: false,
+  completedCycles: 0,
+  awaitingNextCycle: false,
 };
 
 const elements = {
@@ -133,9 +134,13 @@ function renderStudyControls() {
     return;
   }
 
-  if (state.studyCyclePaused) {
-    elements.studyModeText.textContent = "학습 완료";
-    elements.studyButton.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8"/><path d="M4 4v4h4"/></svg>다시 시작`;
+  if (state.awaitingNextCycle) {
+    elements.quizLabel.textContent = `${state.completedCycles}회독 완료`;
+    elements.quizText.textContent = "목록의 모든 단어를 한 번씩 학습했습니다.";
+    elements.answerText.hidden = true;
+    elements.answerText.textContent = "";
+    elements.studyModeText.textContent = `${state.completedCycles}회독 완료`;
+    elements.studyButton.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>다음`;
     return;
   }
 
@@ -168,7 +173,8 @@ function resetStudyProgress() {
   state.currentQuestion = null;
   state.answerVisible = false;
   state.studyQueue = [];
-  state.studyCyclePaused = false;
+  state.completedCycles = 0;
+  state.awaitingNextCycle = false;
 }
 
 function createStudyQueue() {
@@ -262,18 +268,22 @@ function pickQuestion() {
     return;
   }
 
+  if (state.awaitingNextCycle) {
+    state.studyQueue = createStudyQueue();
+    state.awaitingNextCycle = false;
+  }
+
   if (state.studyQueue.length === 0) {
-    if (state.currentQuestion && !state.studyCyclePaused) {
-      const continueStudy = confirm("목록의 모든 단어를 한 번씩 학습했습니다. 계속 학습할까요?");
-      if (!continueStudy) {
-        state.studyCyclePaused = true;
-        renderStudyControls();
-        return;
-      }
+    if (state.currentQuestion) {
+      state.completedCycles += 1;
+      state.awaitingNextCycle = true;
+      state.currentQuestion = null;
+      state.answerVisible = false;
+      renderStudyControls();
+      return;
     }
 
     state.studyQueue = createStudyQueue();
-    state.studyCyclePaused = false;
   }
 
   const nextId = state.studyQueue.shift();
