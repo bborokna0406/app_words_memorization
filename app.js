@@ -1,6 +1,6 @@
 // 이 키는 앱 업데이트 후에도 기존 단어를 유지하기 위해 변경하지 않습니다.
 const STORAGE_KEY = "words-memorization-v1";
-const APP_VERSION = "2026.06.24.1";
+const APP_VERSION = "2026.06.26.2";
 
 const state = {
   words: [],
@@ -18,6 +18,7 @@ const elements = {
   wordForm: document.querySelector("#wordForm"),
   wordInput: document.querySelector("#wordInput"),
   meaningInput: document.querySelector("#meaningInput"),
+  exampleInput: document.querySelector("#exampleInput"),
   saveButton: document.querySelector("#saveButton"),
   cancelEditButton: document.querySelector("#cancelEditButton"),
   editBadge: document.querySelector("#editBadge"),
@@ -48,7 +49,7 @@ function createId() {
 function loadWords() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    state.words = saved ? JSON.parse(saved) : [];
+    state.words = saved ? JSON.parse(saved).map(normalizeWordItem).filter((item) => item.word && item.meaning) : [];
   } catch {
     state.words = [];
     showToast("저장된 데이터를 읽지 못했습니다.");
@@ -60,7 +61,17 @@ function saveWords() {
 }
 
 function normalizeText(value) {
-  return value.trim();
+  return String(value || "").trim();
+}
+
+function normalizeWordItem(item) {
+  return {
+    id: item.id || createId(),
+    word: normalizeText(item.word),
+    meaning: normalizeText(item.meaning),
+    example: normalizeText(item.example),
+    createdAt: Number(item.createdAt) || Date.now(),
+  };
 }
 
 function showToast(message) {
@@ -82,6 +93,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function renderAnswerHtml(question) {
+  const answer = `<span><span class="answer-prefix">\uC815\uB2F5:</span> ${escapeHtml(question.answer)}</span>`;
+  const example = question.example
+    ? `<span class="answer-example"><span class="answer-prefix">\uC608\uBB38:</span> ${escapeHtml(question.example)}</span>`
+    : "";
+
+  return `${answer}${example}`;
+}
+
 function renderSummary() {
   elements.summaryText.textContent = `저장된 단어 ${state.words.length}개`;
 }
@@ -89,7 +109,9 @@ function renderSummary() {
 function renderList() {
   const query = normalizeText(elements.searchInput.value).toLowerCase();
   const filteredWords = state.words.filter((item) => {
-    return item.word.toLowerCase().includes(query) || item.meaning.toLowerCase().includes(query);
+    return item.word.toLowerCase().includes(query)
+      || item.meaning.toLowerCase().includes(query)
+      || item.example.toLowerCase().includes(query);
   });
 
   if (elements.sortSelect.value === "pronunciation") {
@@ -102,6 +124,7 @@ function renderList() {
       <div class="word-main">
         <strong>${escapeHtml(item.word)}</strong>
         <span>${escapeHtml(item.meaning)}</span>
+        ${item.example ? `<span class="word-example">${escapeHtml(item.example)}</span>` : ""}
       </div>
       <div class="item-actions">
         <button type="button" data-action="edit" title="수정" aria-label="${escapeHtml(item.word)} 수정">
@@ -164,6 +187,7 @@ function clearForm() {
   state.editingId = null;
   elements.wordInput.value = "";
   elements.meaningInput.value = "";
+  elements.exampleInput.value = "";
   elements.editBadge.hidden = true;
   elements.cancelEditButton.hidden = true;
   elements.saveButton.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>저장`;
@@ -197,6 +221,7 @@ function upsertWord(event) {
 
   const word = normalizeText(elements.wordInput.value);
   const meaning = normalizeText(elements.meaningInput.value);
+  const example = normalizeText(elements.exampleInput.value);
 
   if (!word || !meaning) {
     showToast("단어와 뜻을 모두 입력하세요.");
@@ -209,16 +234,18 @@ function upsertWord(event) {
 
   if (duplicate) {
     duplicate.meaning = meaning;
+    duplicate.example = example;
     showToast("이미 있는 단어의 뜻을 수정했습니다.");
   } else if (state.editingId) {
     const target = state.words.find((item) => item.id === state.editingId);
     if (target) {
       target.word = word;
       target.meaning = meaning;
+      target.example = example;
       showToast("단어를 수정했습니다.");
     }
   } else {
-    state.words.unshift({ id: createId(), word, meaning, createdAt: Date.now() });
+    state.words.unshift({ id: createId(), word, meaning, example, createdAt: Date.now() });
     showToast("단어를 저장했습니다.");
   }
 
@@ -237,6 +264,7 @@ function editWord(id) {
   state.editingId = id;
   elements.wordInput.value = target.word;
   elements.meaningInput.value = target.meaning;
+  elements.exampleInput.value = target.example || "";
   elements.editBadge.hidden = false;
   elements.cancelEditButton.hidden = false;
   elements.saveButton.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>수정`;
@@ -299,6 +327,7 @@ function pickQuestion() {
     id: item.id,
     prompt: askWord ? item.word : item.meaning,
     answer: askWord ? item.meaning : item.word,
+    example: item.example,
     label: askWord ? "다음 단어의 뜻" : "다음 뜻에 해당하는 단어",
   };
   state.answerVisible = false;
@@ -312,13 +341,24 @@ function pickQuestion() {
   elements.answerButton.disabled = false;
 }
 
-function showAnswer() {
+function showAnswerLegacy() {
   if (!state.currentQuestion) {
     return;
   }
 
   state.answerVisible = true;
   elements.answerText.textContent = `정답: ${state.currentQuestion.answer}`;
+  elements.answerText.innerHTML = `<span><span class="answer-prefix">\uC815\uB2F5:</span> ${escapeHtml(state.currentQuestion.answer)}</span>${state.currentQuestion.example ? `<span class="answer-example"><span class="answer-prefix">\uC608\uBB38:</span> ${escapeHtml(state.currentQuestion.example)}</span>` : ""}`;
+  elements.answerText.hidden = false;
+}
+
+function showAnswer() {
+  if (!state.currentQuestion) {
+    return;
+  }
+
+  state.answerVisible = true;
+  elements.answerText.innerHTML = renderAnswerHtml(state.currentQuestion);
   elements.answerText.hidden = false;
 }
 
@@ -354,12 +394,7 @@ function importWords(file) {
       }
 
       const imported = sourceWords
-        .map((item) => ({
-          id: item.id || createId(),
-          word: normalizeText(String(item.word || "")),
-          meaning: normalizeText(String(item.meaning || "")),
-          createdAt: Number(item.createdAt) || Date.now(),
-        }))
+        .map(normalizeWordItem)
         .filter((item) => item.word && item.meaning);
 
       const byWord = new Map(state.words.map((item) => [item.word, item]));
